@@ -4,20 +4,17 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
   <meta name="viewport" content="user-scalable=no">
-
   <title>Editor</title>
-
-  <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
 </head>
 <body>
 
 <canvas id="my-canvas" width="1024" height="800"></canvas>
 
 <style type="text/css">
-    html,body{
-      overflow: hidden
-    }
-    html, css{
+  html,body{
+    overflow: hidden
+  }
+  html, css{
     touch-action:none;
   }
   body {
@@ -25,41 +22,238 @@
   }
 </style>
 
-<script src="bower_components/EaselJS/lib/easeljs.min.js"></script>
-<script src="bower_components/TweenJS/lib/tweenjs.min.js"></script>
-<script src="bower_components/ace-builds/src/ace.js"></script>
-<script src="src/visualProgramming.js"></script>
+<script src="bower_components/jquery/dist/jquery.min.js"></script>
+<script src="src/jloader.js"></script>
 <script>
-    // 初期化
-    var pm;
-    window.onload = function() {
-      var elm = document.getElementById('my-canvas')
-      elm.width = window.innerWidth
-      elm.height = window.innerHeight
-      elm.style.position = 'fixed';
-      elm.style.top = '0px';
-      elm.style.left = '0px';
-      elm.style.width = elm.width + 'px';
-      elm.style.height= elm.height + 'px';
+  // global var
+  var pm;
 
-      pm = new program_manager('my-canvas', createjs, ace);
+  // load script
+  $.jloader.from([
+    '../bower_components/EaselJS/lib/easeljs.min.js',
+    '../bower_components/TweenJS/lib/tweenjs.min.js',
+    '../bower_components/ace-builds/src/ace.js',
+    '../node_modules/esprima/dist/esprima.js',
+    'visualProgramming.js'
+  ])
+  $.jloader.after('visualProgramming.js', ()=>{
+    var elm = document.getElementById('my-canvas')
+    elm.width = window.innerWidth
+    elm.height = window.innerHeight
+    elm.style.position = 'fixed';
+    elm.style.top = '0px';
+    elm.style.left = '0px';
+    elm.style.width = elm.width + 'px';
+    elm.style.height= elm.height + 'px';
 
-      var tw = elm.width
-      var th = elm.height
-      setInterval(()=>{
-        if(window.innerWidth!=tw || window.innerHeight!=th){
-          tw = window.innerWidth
-          th = window.innerHeight
-          pm.set_size(tw,th)
+    pm = new program_manager('my-canvas');
+
+    var tw = elm.width
+    var th = elm.height
+    setInterval(()=>{
+      if(window.innerWidth!=tw || window.innerHeight!=th){
+        tw = window.innerWidth
+        th = window.innerHeight
+        pm.set_size(tw,th)
+      }
+    },1000)
+
+    // パーステスト
+    pm.afterload(()=>{
+      var i=0
+      var test = (title, code)=>{
+        // errorハンドラ、全部raw codeにする
+        pm.inst.deserializer["error"] = (pm, ast, afterInit)=>{
+          var ret = rawcode.create(pm, "rawcode", 0,0, ()=>{
+            ret.set_code(code.slice(ast.range[0], ast.range[1]))
+            afterInit(ret)
+          })
+          return ret
         }
-      },1000)
-    }
-    function down(){
-      //pm.emit_all_code()
-      //pm.serialize_all_code()
-    }
-</script>
+        var d = $.Deferred()
+        var ret = pm.deserializeAST(esprima.parse(code,{range: true}), (result)=>{
+          var e = result.emit_body('','','', '')
+          // check ast
+          if(code+'\n'==e){
+            console.log(title+':'+'%cOK Deserialize AST%c','color:green;','')
+          }else{
+            var o = esprima.parse(code)
+            var r = esprima.parse(e)    
+            if(JSON.stringify(o)==JSON.stringify(r)){
+              console.log(title+':'+'%cOK Deserialize AST%c','color:green;','')              
+            }else{
+              console.log(title+':'+'%cNG Deserialize AST%c','color:red;','')
+              console.log("   code:\n"+code+"\n   emit:\n"+e)
+              console.log("   codejson:\n"+JSON.stringify(o)+"\n   emitjson:\n"+JSON.stringify(r))
+            }
+          }
+          // check serialize json
+          var json_obj = result.serialize()
+          var ret2 = pm.deserialize_any(json_obj, (result2)=>{
+            var str = result2.emit_body('','','', '')
+            if(str == e){
+              console.log(title+':'+'%cOK Serialize JSON%c','color:blue;','')              
+            }else{
+              console.log(title+':'+'%cNG Serialize JSON%c','color:red;','')
+              console.log(str)
+              console.log(e)
+            }
+            d.resolve()
+          })
+        })
+        ret.set_name(title)
+        ret.base_tag.set_pos(100, 200+30*(++i))
+        return d
+      }
+      async function run(full_test = false){
+        if(full_test || false){
+          await test("def_var", "var a = 'test'")
+          await test("literal_num", "10")
+          await test("literal_txt",'"test"')
+          await test("operator",'1+(2-3*4)/5%6')
+        }
+        
+        if(full_test || false){
+          console.log("two hand operator")
+          await test("operator+",'1+1')
+          await test("operator-",'1-1')
+          await test("operator*",'1*1')
+          await test("operator/",'1/1')
+          await test("operator%",'1%1')
+        }
 
+        if(full_test || false){
+          console.log("two hand operator with equal")
+          await test("operator=",'var a\na=1')
+          await test("operator+=",'var a\na+=1')
+          await test("operator-=",'var a\na-=1')
+          await test("operator*=",'var a\na*=1')
+          await test("operator/=",'var a\na/=1')
+          await test("operator%=",'var a\na%=1')
+        }
+
+        if(full_test || false){
+          console.log("one hand bit operator")
+          await test("operator~",'~1')
+        }
+
+        if(full_test || false){
+          console.log("two hand bit operator")
+          await test("operator<<",'1<<1')
+          await test("operator>>",'1>>1')
+          await test("operator&",'1&1')
+          await test("operator|",'1|1')
+          await test("operator^",'1^1')
+        }
+
+        if(full_test || false){
+          console.log("two hand bit operator with equal")
+          await test("operator<<",'var a\na<<=1')
+          await test("operator>>",'var a\na>>=1')
+          await test("operator&",'var a\na&=1')
+          await test("operator|",'var a\na|=1')
+          await test("operator^",'var a\na^=1')
+        }
+
+        if(full_test || false){
+          console.log("operator compare")
+          await test("operator==",'1==1')
+          await test("operator>=",'1>=1')
+          await test("operator<=",'1<=1')
+          await test("operator>",'1>1')
+          await test("operator<",'1<1')
+        }
+
+        if(full_test || false){
+          console.log("one hand logic operator")
+          await test("operator!",'!1')
+        }
+
+        if(full_test || false){
+          console.log("two hand logic operator")
+          await test("operator&&",'1&&1')
+          await test("operator||",'1||1')
+          await test("operator!=",'1!=1')
+          await test("operator==",'1==1')
+        }
+
+        if(full_test || false){
+          console.log("function")
+          await test('function_empty', 'function test() {\n}\n')
+          await test('function_arg',   'function test(a,b,c) {\n}\n')
+          await test('function_body',  'function test(a,b,c) {\n    var t\n    t+=1\n}\n')
+          await test('function_init',  'var f = function  (a,b,c) {\n    var t\n    t+=1\n}\n')
+          await test('function_arrow', 'var f = (a,b,c) => {\n    var t\n    t+=1\n}\n')
+          await test('function_call',  'function func(a) {\n    return 2*a\n}\n\nfunc(2)')
+        }
+
+        if(full_test || false){
+          console.log("class")
+          await test('class_test',
+            `
+            class Test1
+            {
+                constructor(a,b,c) {
+                    this.c1 = null
+                    this.c2 = 1
+                }
+            　  func1(a,b,c) {
+                    return this.func1(1, 2, 3)
+                }
+            }
+            class Test2
+            {
+                constructor(a,b,c) {
+                    this.test1 = new Test1(a, b, c)
+                }
+                func2() {
+                    return 3
+                }
+            }
+            var t = new Test2(1, 2, 3)
+            var a = t.func2()
+            t.test1.func1(1, 2, a)
+          `)
+        }
+
+        if(full_test || false){
+          console.log("array")
+          await test("array expression",'var a=[1,2,3,4]')
+          await test("use array",'var a=[1,2,3,4]; a[0]')
+        }
+
+        if(full_test || false){
+          console.log("if")
+          await test("if statement 1",'if(true){var a}')
+          await test("if statement 2",'()=>{if(true){var a}else if(false){var b}else{var c; var d;}}')
+            // esprimaで裸のif elseがシンタックスエラーになる？のでlambdaに包んでいます。
+        }
+        
+        if(full_test || false){
+          console.log("for")
+          await test("if statement",'if(true){var a}')
+        }
+
+        if(full_test || false){
+          console.log("other control statement")
+          await test("block",'{var a; a+=1}')
+        }
+
+        console.log("end all test")
+      }
+      run(false)
+    })
+  })
+
+  function down(){
+    //pm.emit_all_code()
+    //pm.serialize_all_code()
+  }
+
+  $(window).on('beforeunload', function() {
+      return "このページを離れると、入力したデータが削除されます。";
+  });  
+</script>
 </body>
 </html>
 

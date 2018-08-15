@@ -45,7 +45,7 @@ class tagInput
       me.b_ng.remove()
       callback(value)
     })
-    this.b_ng = new tagButton(pm, ix+130, iy+130, 100, 50, 'Cancel', "src/tag/tag_blue.png", function(e, b){
+    this.b_ng = new tagButton(pm, ix+140, iy+130, 100, 50, 'Cancel', "src/tag/tag_blue.png", function(e, b){
       me.edit.remove()
       me.b_new_name.remove()
       me.b_ok.remove()

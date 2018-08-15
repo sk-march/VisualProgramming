@@ -10,6 +10,8 @@ var _visual_block = {
       this.y = vb.y || 0
       this.z = vb.z || 0
       this.id = -1
+      this.holder = null
+      this.collider = []  
     }
     init_render(pm, afterInit=()=>{}){}
     emit(tab=''){
@@ -17,6 +19,15 @@ var _visual_block = {
     }
     get_collider_recursive(){
       return []
+    }
+    find_by_name(name, check_holder=true){
+      if(this.name==name){
+        return this
+      }else if(this.holder && check_holder){
+        return this.holder.find_by_name(name)
+      }else{
+        return null
+      }
     }
     serialize(){
       return {

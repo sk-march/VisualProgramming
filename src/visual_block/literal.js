@@ -4,9 +4,7 @@ class literal extends visual_block
     vb.type = 'literal';
     super(vb)
     this.value = 'null'
-    this.holder = null
     this.base_tag = null
-    this.collider = []
   }
   set_holder(h){
     this.holder = h
@@ -63,7 +61,7 @@ class literal extends visual_block
 
       var text
       if(me.head_link!=null) text =  me.value
-      var t = new createjs.Text(text, "20px serif", "Black")
+      var t = new createjs.Text(text, "20px serif", "Green")
       var w = t.getMeasuredWidth()
       t.x = 5
       t.y = 2
@@ -111,6 +109,14 @@ class literal extends visual_block
     })
     return ret
   }
+  static deserializeAST(pm, ast, afterInit=(e)=>{}){
+    var ret = literal.create(pm, "ast literal", 100, 100, ()=>{
+      ret.value = ast.raw
+      afterInit(ret)
+      ret.refresh()
+    })
+    return ret
+  }  
   static create(pm, name, x, y, afterInit=()=>{}){
     var c = new literal({name:name, x:x, y:y})
     c.id = pm.num_obj

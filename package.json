@@ -1,0 +1,25 @@
+{
+  "name": "visual-programming",
+  "version": "1.0.0",
+  "description": "Visual programming web application.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sk-march/VisualProgramming.git"
+  },
+  "author": "sk-march",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sk-march/VisualProgramming/issues"
+  },
+  "homepage": "https://github.com/sk-march/VisualProgramming#readme",
+  "dependencies": {
+    "body-parser": "^1.18.2",
+    "esprima": "^4.0.0",
+    "estraverse": "^4.2.0",
+    "express": "^4.16.2"
+  }
+}

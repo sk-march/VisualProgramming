@@ -1,6 +1,6 @@
 class program_manager_impl
 {
-  constructor(canvas_id, createjs, ace){
+  constructor(canvas_id){
     // init create js
     var canvas = document.getElementById(canvas_id);
     var stage = new createjs.Stage( canvas );
@@ -9,7 +9,7 @@ class program_manager_impl
     this.num_obj = 0;
     this.all_visual_blocks = []
     this.id_obj_map = {}
-    this.deserialiser = {}
+    this.deserializer = {}
     this.cj = createjs
     this.ace = ace
     this.stage = stage
@@ -124,6 +124,9 @@ class program_manager_impl
           if(s<0.01) s=0.1
           if(s>5) s=5
           me.set_scale(s)
+      }else{
+        var p = me.get_pos()
+        me.set_pos(p.x + e.wheelDeltaX, p.y + e.wheelDeltaY);
       }
     });
 
@@ -243,34 +246,36 @@ class program_manager_impl
         me.cj.Ticker.framerate = me.framerate;
 
         // make minimap
-        me.minimap.removeAllChildren()
-        // outline
-        me.minimap.addChild(me.minimap.bg)
-        // clone
-        var cl = me.top.clone(true)
-        cl.scaleX = 1
-        cl.scaleY = 1
-        cl.x = 0
-        cl.y = 0
-        me.minimap.addChild(cl)
-        // viewport
-        var range = new me.cj.Shape()
-        range.graphics.beginFill('#FF000010');
-        var r ={
-           x:-me.top.x/me.top.scaleX,
-           y:-me.top.y/me.top.scaleY,
-           w: me.stage.canvas.width/me.top.scaleX, 
-           h:me.stage.canvas.height/me.top.scaleY
-          }
-        if(r.x<0)r.x=0
-        if(r.y<0)r.y=0
-        if(r.w>me.bg1.image.width*2) r.w = me.bg1.image.width*2
-        if(r.h>me.bg1.image.height*2) r.h = me.bg1.image.height*2
-        range.graphics.drawRect(r.x, r.y, r.w, r.h)
-        me.minimap.addChild(range)
-
-        //var data = me.stage.canvas.toDataURL();
-        //me.minimap_element.innerHTML = '<img src="' + data + '"  width="200" height="200"  />';
+        if(me.minimap){
+          me.minimap.removeAllChildren()
+          // outline
+          me.minimap.addChild(me.minimap.bg)
+          // clone
+          var cl = me.top.clone(true)
+          cl.scaleX = 1
+          cl.scaleY = 1
+          cl.x = 0
+          cl.y = 0
+          me.minimap.addChild(cl)
+          // viewport
+          var range = new me.cj.Shape()
+          range.graphics.beginFill('#FF000010');
+          var r ={
+             x:-me.top.x/me.top.scaleX,
+             y:-me.top.y/me.top.scaleY,
+             w: me.stage.canvas.width/me.top.scaleX, 
+             h:me.stage.canvas.height/me.top.scaleY
+            }
+          if(r.x<0)r.x=0
+          if(r.y<0)r.y=0
+          if(r.w>me.bg1.image.width*2) r.w = me.bg1.image.width*2
+          if(r.h>me.bg1.image.height*2) r.h = me.bg1.image.height*2
+          range.graphics.drawRect(r.x, r.y, r.w, r.h)
+          me.minimap.addChild(range)
+  
+          //var data = me.stage.canvas.toDataURL();
+          //me.minimap_element.innerHTML = '<img src="' + data + '"  width="200" height="200"  />';            
+        }
 
         // update!!!
         me.stage.update();
@@ -282,8 +287,8 @@ class program_manager_impl
     var me = this
     var gx = ix - 70
     var gy = iy - 20
-    var make_edit_button = (text, label, img, i, func)=>{
-      return new tagButton(me, gx, 30+gy+60*i, 200, 50, text, img, function(e, b){
+    var make_edit_button = (text, label, img, x, i, func)=>{
+      return new tagButton(me, x, 30+gy+60*i, 200, 50, text, img, function(e, b){
         var it = new tagInput(me, label, 'variable_name_'+me.id, gx, gy, 280, 40, function(text){
           if(text!==undefined && text!=''){
             func(text,ix,iy)
@@ -292,34 +297,40 @@ class program_manager_impl
         b.remove()
       })            
     }
-    var b_variable = make_edit_button('+ variable', 'Enter name', 'src/tag/tag_red.png',    0, (text,x,y)=>{def_variable.create(me,text,x,y)})
-    var b_function = make_edit_button('+ function', 'Enter name', 'src/tag/tag_blue.png',   1, (text,x,y)=>{def_function.create(me,text,x,y)})
-    var b_class    = make_edit_button('+ class', 'Enter name',    'src/tag/tag_yellow.png', 2, (text,x,y)=>{def_class.create(me,text,x,y)})
+    var b_variable = make_edit_button('+ variable', 'Enter name', 'src/tag/tag_red.png',    gx, 0, (text,x,y)=>{def_variable.create(me,text,x,y)})
+    var b_function = make_edit_button('+ function', 'Enter name', 'src/tag/tag_blue.png',   gx, 1, (text,x,y)=>{def_function.create(me,text,x,y)})
+    var b_class    = make_edit_button('+ class', 'Enter name',    'src/tag/tag_yellow.png', gx, 2, (text,x,y)=>{def_class.create(me,text,x,y)})
     var b_operator  = new tagButton(me, gx, 30+gy+60*3, 200, 50, '+ operator', 'src/tag/tag_white.png', function(e, b){
       operator.create(me, 'operator',ix,iy)
     })
-    var b_literal  = make_edit_button('+ literal', 'Enter value',    'src/tag/tag_white.png', 4, (text,x,y)=>{
+    var b_if  = new tagButton(me, gx, 30+gy+60*4, 200, 50, '+ if', 'src/tag/tag_white.png', function(e, b){
+      statementIf.create(me, 'if',ix,iy)
+    })
+    var b_array  = new tagButton(me, gx, 30+gy+60*5, 200, 50, '+ array', 'src/tag/tag_white.png', function(e, b){
+      expressionArray.create(me, 'array',ix,iy)
+    })
+    var b_literal  = make_edit_button('+ literal', 'Enter value',    'src/tag/tag_white.png', gx, 6, (text,x,y)=>{
       var ret = literal.create(me,'literal',x,y)
       ret.value = text
     })
-
-    var b_rawcode  = new tagButton(me, gx, 30+gy+60*5, 200, 50, '+ rawcode', 'src/tag/tag_white.png', function(e, b){
+    var b_rawcode  = new tagButton(me, gx, 30+gy+60*7, 200, 50, '+ rawcode', 'src/tag/tag_white.png', function(e, b){
       rawcode.create(me, 'rawcode',ix,iy)
     })
-    var b_emit = new tagButton(me, gx, 30+gy+60*6, 150, 50, 'Emit code', 'src/tag/tag_white.png', function(e, b){
+
+    var b_emit = new tagButton(me, gx+200, 30+gy+60*0, 150, 50, 'Emit project', 'src/tag/tag_white.png', function(e, b){
       var ret = me.emit()
       var raw = rawcode.create(me, 'emited code',gx,gy)
       raw.set_code(ret)
     })
-    var b_serialize = new tagButton(me, gx, 30+gy+60*7, 200, 50, 'Serialize code', 'src/tag/tag_white.png', function(e, b){
+    var b_serialize = new tagButton(me, gx+200, 30+gy+60*1, 200, 50, 'Serialize project', 'src/tag/tag_white.png', function(e, b){
       var ret = me.serialize()
       var raw = rawcode.create(me, 'serialized code',gx,gy)
       raw.set_code(JSON.stringify(ret, null , "\t"))
     })
-    var b_pjname = make_edit_button('Set project name', 'Enter name', 'src/tag/tag_white.png', 8, (text,x,y)=>{
+    var b_pjname = make_edit_button('Set project name', 'Enter name', 'src/tag/tag_white.png', gx+200, 2, (text,x,y)=>{
       me.rename(text)
     })
-    var b_scale = new tagButton(me, gx, 30+gy+60*9, 150, 50, 'Scale', 'src/tag/tag_white.png', function(e, b){
+    var b_scale = new tagButton(me, gx+200, 30+gy+60*3, 150, 50, 'Scale', 'src/tag/tag_white.png', function(e, b){
       me.mouse_scale = true
     })
   }
@@ -516,13 +527,16 @@ class program_manager_impl
     return ret
   }
 
-  set_deserializer(type, func){
-    this.deserialiser[type] = func
+  set_deserializer(inst){
+    var name = inst.name
+    this.deserializer[name] = inst.deserialize
   }
 
   set_serialized_idmap(oldId, newId){
     this.serialized_idmap[oldId] = newId
   }
+
+
   find_visual_block_by_id(id, callback=null){
     var me = this
     var timerid = setInterval(()=>{
@@ -535,14 +549,95 @@ class program_manager_impl
       }
     }, 100)
   }
-  deserialize(data){
+  find_visual_block_by_name(name, vb_from, callback){
+    var me = this
+    var timerid = setInterval(()=>{
+      var r = vb_from.find_by_name(name)
+      if(r){
+        if(callback!=null){
+          callback(r)
+        }
+        clearInterval(timerid)
+      }
+    }, 100)    
+  }
+  find_visual_block_by_index(index, vb_from, callback){
+    var me = this
+    var timerid = setInterval(()=>{
+      if(vb_from.init){
+        var r = vb_from.init.args[index]
+        if(r){
+          if(callback!=null){
+            callback(r)
+          }
+          clearInterval(timerid)
+        }  
+      }
+    }, 100)    
+  }  
+  find_by_name(name){
+    return null
+  }
+
+  async async_run(func, ...rest){
+    var me = this
+    return new Promise(function(resolve, reject) {
+      me[func](...rest, (r)=>{
+        resolve(r)
+      })
+    });
+  }
+
+  deserialize_any(data, afterInit){
+    if(data.type in this.deserializer){
+      return this.deserializer[data.type](this, data, afterInit)
+    }else{
+      console.log("%c"+data.type + " is not support!!!%c",'color:red;','')
+      return this.deserializer["error"](this, data, afterInit)
+    }
+  }
+  deserialize(data, afterInit=()=>{}){
     // console.log(data)
     this.serialized_idmap = {}
     var obj = JSON.parse(data)
     this.project_name = obj.project_name
     this.framerate = obj.framerate
     for(var vb of obj.all_visual_blocks){
-      var t = this.deserialiser[vb.type](this, vb)
+      this.deserialize_any(vb)
+    }
+  }
+
+  deserializeAST_ExpressionStatement(pm, ast, afterInit=()=>{}){
+    if(ast.type=="ExpressionStatement"){
+      if(ast.expression.type in pm.deserializer){
+          return pm.deserializer[ast.expression.type](pm, ast.expression, afterInit)
+      }else{
+        console.log("%c"+ast.expression.type + " ExpressionStatement is not support!!!%c",'color:red;','')
+        return pm.deserializer["error"](pm, ast.expression, afterInit)
+      }
+    }
+  }
+  deserializeAST(ast, afterInit=()=>{}){
+    var me = this
+    if(ast.type=="Program"){
+      var ret = def_function.create(this, "func_from_AST", 100, 100, ()=>{
+        var count = 0
+        for(var p of ast.body){
+          count++
+          ret.push_statement(this.deserialize_any(p, ()=>{
+            count--
+          }))
+        }
+        var iId = setInterval(()=>{
+          if(count == 0){
+            setTimeout(()=>{
+              afterInit(ret)
+            }, 100)
+            clearInterval(iId)
+          }
+        },100)  
+      })
+      return ret
     }
   }
 }

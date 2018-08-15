@@ -1,0 +1,23 @@
+{
+  "name": "visual-programming",
+  "description": "Visual programming web application.",
+  "main": "index.js",
+  "authors": [
+    "sk-march"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/sk-march/VisualProgramming",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "ace-builds": "^1.3.0",
+    "EaselJS": "^1.0.2",
+    "TweenJS": "^1.0.2",
+    "jquery": "^3.3.1"
+  }
+}

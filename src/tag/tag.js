@@ -148,10 +148,14 @@ class tag
   resize(iw,ih){
     this.w = iw
     this.h = ih
-    this.bg.scaleX = this.w / this.bg.getBounds().width;
-    this.bg.scaleY = this.h / this.bg.getBounds().height;
-    this.visual_block.w = iw
-    this.visual_block.h = ih
+    if(this.bg.getBounds()){
+      this.bg.scaleX = this.w / this.bg.getBounds().width;
+      this.bg.scaleY = this.h / this.bg.getBounds().height;  
+    }
+    if(this.visual_block){
+      this.visual_block.w = iw
+      this.visual_block.h = ih  
+    }
   }
   z_top(){
     this.parent.setChildIndex(this.container, this.parent.numChildren-1)

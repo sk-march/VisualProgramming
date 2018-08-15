@@ -3,14 +3,14 @@ class def_class extends visual_block
   constructor(vb={name:'none', x:0, y:0, z:0}){
     vb.type = 'def_class'
     super(vb)
-    //this.super = 'null'; // not support extends
     this.variables = [];
     this.methods = [];
+    this.this_vb = null;
+    this.new_vb = null;
+    //this.super = 'null'; // not support extends
     this.click_pos = {x:-1, y:-1}
     this.mouse_moved = false
-    this.holder = null
     this.base_tag = null
-    this.collider = []
     this.impl_tag = null
     this.impl_line = null
   }
@@ -96,7 +96,7 @@ class def_class extends visual_block
       })           
     }
   }
-  rename(newname){
+  set_name(newname){
     if(newname!==undefined && newname!=''){
       this.name = newname
       this.cjtext.text = this.name
@@ -105,7 +105,7 @@ class def_class extends visual_block
         this.cjtext.text = (this.name).slice(0,20)+'...'
       }
 
-      this.this_vb.rename(this.name)
+      this.this_vb.set_name(this.name)
     }
   }
   init_render(pm, afterInit=()=>{}){
@@ -114,6 +114,10 @@ class def_class extends visual_block
     this.this_vb.definition_link = this
     this.this_vb.base_tag.visible(false)
     this.this_vb.holder.rid_visualblock(this.this_vb)
+
+    this.new_vb = def_function.create(pm, "new "+this.name, 0, 0)
+    this.new_vb.base_tag.visible(false)
+    this.new_vb.holder.rid_visualblock(this.new_vb)
 
 
     var me = this
@@ -165,6 +169,11 @@ class def_class extends visual_block
               var i = def_variable.create(pm, text, gx, gy)
               i.set_type(me.name)
               i.definition_link = me
+
+              var f = function_advocation.create(pm, "", 0, 0)
+              f.set_func(me.new_vb)
+              i.base_tag.onDrop(f.base_tag)
+
               setTimeout(()=>{
                 i.base_tag.tween()
                   .to({y:gy + 30}, 100)
@@ -187,7 +196,8 @@ class def_class extends visual_block
           var bgx = gx+10
           var bgy = gy
           var it = new tagInput(pm, 'new name', 'inst_name_'+me.id, bgx, bgy, 280, 40, (text)=>{
-            me.rename(text)
+            me.set_name(text)
+            this.new_vb.rename("new "+this.name)
             console.log(text);
           })
         }        
@@ -389,6 +399,29 @@ class def_class extends visual_block
     }
     return null
   }
+  find_by_name(name, check_holder=true){
+    if(name == 'this'){
+      return this.this_vb
+    }
+    if(name == 'new '+this.name){
+      return this.new_vb
+    }
+    for(var b of this.variables){
+      var t = b.find_by_name(name, false)
+      if(t) return t
+    }
+    for(var b of this.methods){
+      var t = b.find_by_name(name, false)
+      if(t) return t
+    }
+    if(this.name==name){
+      return this
+    }else if(this.holder&&check_holder){
+      return this.holder.find_by_name(name)
+    }else{
+      return null
+    }
+  }
 
   emit(tab=''){
     var ret = [ 
@@ -397,13 +430,14 @@ class def_class extends visual_block
     ];
     var f_constructor_exist = false
 
+    this.sort_visualblock('name')
     // define method
     for(var f of this.methods){
       if(f.name == "constructor"){
         f_constructor_exist = true
         var tmp = []
         for(var m of this.variables){
-          tmp.push(m.emit(tab+_visual_block.tab_size+_visual_block.tab_size));
+        //  tmp.push(m.emit(tab+_visual_block.tab_size+_visual_block.tab_size));
         }
         tmp.push('\n')
         ret.push(f.emit(tab+_visual_block.tab_size, tmp.join('\n')))
@@ -416,7 +450,7 @@ class def_class extends visual_block
       // define default constructor and members
       ret.push(tab + _visual_block.tab_size+'constructor(){');
       for(var m of this.variables){
-        ret.push(m.emit(tab+_visual_block.tab_size+_visual_block.tab_size));
+      //  ret.push(m.emit(tab+_visual_block.tab_size+_visual_block.tab_size));
       }
       ret.push(tab+_visual_block.tab_size+'}')
     }
@@ -428,32 +462,30 @@ class def_class extends visual_block
   serialize(){
     var ret = super.serialize()
     ret.impl_tag_pos = {x:this.impl_tag.x, y:this.impl_tag.y}
-    ret.this_vb = this.this_vb.serialize()
     ret.variables = this.variables.map((i)=>{return i.serialize()})
     ret.methods = this.methods.map((i)=>{return i.serialize()})
     ret.is_open = this.impl_tag.is_visible()
+    ret.this_id = this.this_vb.id
+    ret.new_id = this.new_vb.id
     return ret
   }
   static deserialize(pm, json_obj, afterInit=(e)=>{}){
     var ret = def_class.create(pm, json_obj.name, json_obj.x, json_obj.y, ()=>{
       pm.set_serialized_idmap(json_obj.id, ret.id)
-
-      ret.this_vb = pm.deserialiser[json_obj.this_vb.type](pm, json_obj.this_vb, (e)=>{})
-      ret.this_vb.holder.rid_visualblock(ret.this_vb)
-      ret.this_vb.base_tag.visible(false)
-  
+      pm.set_serialized_idmap(json_obj.this_id, ret.this_vb.id)
+      pm.set_serialized_idmap(json_obj.new_id, ret.new_vb.id)
 
       var count = 0
       for(var vb of json_obj.variables){
         count++
-        pm.deserialiser[vb.type](pm, vb, (e)=>{
+        pm.deserialize_any(vb, (e)=>{
           ret.base_tag.onDrop(e.base_tag)
           count--
         })
       }
       for(var vb of json_obj.methods){
         count++
-        pm.deserialiser[vb.type](pm, vb, (e)=>{
+        pm.deserialize_any(vb, (e)=>{
           count--
           ret.base_tag.onDrop(e.base_tag)
         })
@@ -479,11 +511,45 @@ class def_class extends visual_block
     })
     return ret
   }
+  static deserializeAST(pm, ast, afterInit=(e)=>{}){
+    var ret = def_class.create(pm, ast.id.name, 100, 100, ()=>{
+  
+      var count = 0
+      for(var a of ast.body.body){
+        count++
+        pm.deserialize_any(a, (e)=>{
+          ret.base_tag.onDrop(e.base_tag)
+          count--
+        })
+      }
+      var iId = setInterval(()=>{
+        if(count==0){
+//          ret.impl_tag.set_pos(json_obj.impl_tag_pos.x, json_obj.impl_tag_pos.y)
+          setTimeout(()=>{
+            ret.update_children_pos()
+            ret.impl_tag.set_pos(200,0)
+            ret.impl_line.update_line()
+            ret.impl_tag.visible(false)
+            ret.collider=[ret.impl_tag.bg]
+            ret.impl_line.update_line()
+            ret.base_tag.z_top()
+            ret.pm.clear_menu()
+            afterInit(ret)
+          },100)
+          clearInterval(iId)    
+        }
+      },100)
+    })
+    return ret
+  }
+
   static create(pm, name, x, y, afterInit=(e)=>{}){
     var c = new def_class({name:name, x:x, y:y})
     c.id = pm.num_obj
     pm.num_obj += 1
-    c.init_render(pm,afterInit)
+    c.init_render(pm,()=>{
+      afterInit()
+    })
     pm.id_obj_map[c.id] = c
     pm.add_visualblock(c)
     return c

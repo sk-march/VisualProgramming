@@ -6,9 +6,7 @@ class def_function extends visual_block
     this.args = ''
     this.body = []
     this.is_member=false;
-    this.holder = null
     this.base_tag = null
-    this.collider = []
     this.impl_tag = null
     this.impl_line = null
   }
@@ -20,18 +18,42 @@ class def_function extends visual_block
     this.args = a;
     this.reflesh_text()
   }
+  push_statement(e, callback=()=>{}){
+    var me = this
+    // add body
+    var t = e.base_tag
+    if(e==null || e.type === undefined) return
+    // check duplicate
+    for(var i=0; i<me.impl_tag.container.numChildren; i++){
+      var c = me.impl_tag.container.getChildAt(i)
+      if(c == t.container){
+        me.rid_visualblock(e)
+        setTimeout(()=>{
+          me.body.push(e)
+          me.update_children_pos()     
+          callback()     
+        },100)              
+        return
+      }
+    }
+    // add to array
+    e.holder.rid_visualblock(e)
+    // exchange parent
+    t.set_parent(me.impl_tag.container)
+    e.set_holder(me)
+    setTimeout(()=>{
+      me.body.push(e)
+      me.update_children_pos()    
+      callback()     
+    },100)    
+    return
+  }
   add_visualblock(b){
     var me = this
     var th = 30
     for(var i=0; i<me.body.length; i++){
       if(me.body[i].base_tag.y > b.base_tag.y){
         me.body.splice(i, 0, b)
-        b.base_tag.tween().to({x:30, y:th},200)
-        b.base_tag.visual_block.x = 30
-        b.base_tag.visual_block.y = th  
-        b.base_tag.x = 30
-        b.base_tag.y = th
-  
         me.update_children_pos()
         return
       }
@@ -78,7 +100,7 @@ class def_function extends visual_block
       })           
     }
   }
-  rename(newname){
+  set_name(newname){
     if(newname!==undefined && newname!=''){
       this.name = newname
       this.reflesh_text()
@@ -162,7 +184,7 @@ class def_function extends visual_block
           var bgx = gx+10
           var bgy = gy
           var it = new tagInput(pm, 'new name', 'inst_name_'+me.id, bgx, bgy, 280, 40, (text)=>{
-            me.rename(text)
+            me.set_name(text)
           })
         }        
         ts.buttons[3].callback = (e, b)=>{
@@ -271,7 +293,6 @@ class def_function extends visual_block
         me.impl_tag.container.addChild(t);
         me.impl_tag.cjtext = t
         me.impl_tag.update_text()
-
         afterInit()
       })
       me.impl_tag.update_text=()=>{
@@ -355,39 +376,54 @@ class def_function extends visual_block
     }
     return null
   }
+  find_by_name(name, check_holder=true){
+    for(var b of this.body){
+      var t = b.find_by_name(name, false)
+      if(t) return t
+    }
+    if(this.name==name){
+      return this
+    }else if(this.holder && check_holder){
+      return this.holder.find_by_name(name)
+    }else{
+      return null
+    }
+  }
 
   emit_name_args(){
     var ret;
     if(this.is_member){
       ret = this.name + '(' + this.args + ')';
     }else{
-      ret = 'function '+this.name + '(' + this.args + ')';
+      if(this.name == ""){
+        ret = '(' + this.args + ') =>';
+      }else{
+        ret = 'function '+this.name + '(' + this.args + ')';
+      }
     }
     return ret;
   } 
   emit_body(tab, head="", tail=""){
     var ret;
     if(this.is_member){
-      ret = '{\n';
+      ret = '';
       ret += head
       for(var s of this.body){
-        ret += s.emit(tab+_visual_block.tab_size) + '\n';
+        ret += s.emit(tab) + '\n';
       }
       ret += tail
-      ret+= tab+'}\n'
     }else{
-      ret = '{\n';
+      ret = '';
       ret += head
       for(var s of this.body){
-        ret += s.emit(tab+_visual_block.tab_size) + '\n';
+        ret += s.emit(tab) + '\n';
       }
       ret += tail
-      ret+= tab+'}\n'
     }
     return ret;    
   }
   emit(tab='', head="", tail=""){
-    var ret = tab + this.emit_name_args() + ' ' + this.emit_body(tab, head, tail)
+    var ret = tab + this.emit_name_args() + ' {\n' + this.emit_body(tab+_visual_block.tab_size, head, tail) +tab+'}\n'
     return ret;
   }
   serialize(){
@@ -410,13 +446,14 @@ class def_function extends visual_block
       var count = 0
       for(var vb of json_obj.body){
         count++
-        pm.deserialiser[vb.type](pm, vb, (e)=>{
+        pm.deserialize_any(vb, (e)=>{
           ret.base_tag.onDrop(e.base_tag)
           count--
         })
       }
       var iId = setInterval(()=>{
         if(count == 0){
+          clearInterval(iId)
           setTimeout(()=>{
             // wait set_pos
             ret.body=[]
@@ -436,17 +473,149 @@ class def_function extends visual_block
             }
             afterInit(ret)
           }, 100)
-          clearInterval(iId)
         }
       },100)
     })
     return ret
   }
+  static deserializeAST_declaration(pm, ast, afterInit=(e)=>{}){
+    var ret = def_function.create(pm, ast.id.name, 100, 100, ()=>{
+      // param
+      var params = ast.params.map((e)=>{return e.name})
+      if(params.length!=0) ret.set_args(params)
+
+      var count = 0
+      for(var b of ast.body.body){
+        count++
+        pm.deserialize_any(b, (r)=>{
+          ret.push_statement(r, ()=>{
+            count--  
+          })
+        })  
+      }
+
+      //ast.expression
+      //ast.generator
+      //ast.async
+
+      var iId = setInterval(()=>{
+        if(count==0){
+          ret.impl_tag.set_pos(200,0)
+          afterInit(ret)
+          clearInterval(iId)
+        }
+      },100)
+
+    })
+    return ret
+  }
+  static deserializeAST_expression(pm, ast, afterInit=(e)=>{}){
+    var ret = def_function.create(pm, " ", 100, 100, ()=>{
+      // param
+      var params = ast.params.map((e)=>{return e.name})
+      if(params.length!=0) ret.set_args(params)
+
+      var count = 0
+      for(var b of ast.body.body){
+        count++
+        pm.deserialize_any(b, (r)=>{
+          ret.push_statement(r, ()=>{
+            count--  
+          })
+        })  
+      }
+
+      //ast.expression
+      //ast.generator
+      //ast.async
+
+      var iId = setInterval(()=>{
+        if(count==0){
+          ret.impl_tag.set_pos(200,0)
+          afterInit(ret)
+          clearInterval(iId)
+        }
+      },100)
+
+    })
+    return ret
+  }
+  static deserializeAST_arrowfunction(pm, ast, afterInit=(e)=>{}){
+    var ret = def_function.create(pm, "", 100, 100, ()=>{
+      // param
+      var params = ast.params.map((e)=>{return e.name})
+      if(params.length!=0) ret.set_args(params)
+
+      var count = 0
+      for(var b of ast.body.body){
+        count++
+        pm.deserialize_any(b, (r)=>{
+          ret.push_statement(r, ()=>{
+            count--  
+          })
+        })  
+      }
+
+      //ast.expression
+      //ast.generator
+      //ast.async
+
+      var iId = setInterval(()=>{
+        if(count==0){
+          ret.impl_tag.set_pos(200,0)
+          afterInit(ret)
+          clearInterval(iId)
+        }
+      },100)
+
+    })
+    return ret
+  }
+  static deserializeAST_method(pm, ast, afterInit=(e)=>{}){
+    var ret = def_function.create(pm, ast.kind=="constructor"?ast.kind:ast.key.name, 100, 100, ()=>{
+      // param
+      var params = ast.value.params.map((e)=>{return e.name})
+      if(params.length!=0) ret.set_args(params)
+
+      var count = 0
+      for(var b of ast.value.body.body){
+        count++
+        pm.deserialize_any(b, (r)=>{
+          ret.push_statement(r, ()=>{
+            count--  
+          })
+        })  
+      }
+      ret.is_member = true
+
+      //ast.expression
+      //ast.generator
+      //ast.async
+
+      var iId = setInterval(()=>{
+        if(count==0){
+          ret.impl_tag.set_pos(200,0)
+          afterInit(ret)
+          clearInterval(iId)
+        }
+      },100)
+
+    })
+    return ret
+  }
+
+  
+
   static create(pm, name, x, y, afterInit=()=>{}){
     var c = new def_function({name:name, x:x, y:y})
     c.id = pm.num_obj
     pm.num_obj += 1
-    c.init_render(pm,afterInit)
+    c.init_render(pm,()=>{
+      setTimeout(()=>{
+        c.impl_tag.set_pos(200,0)
+        afterInit()
+      },100)
+    })
     pm.id_obj_map[c.id] = c
     pm.add_visualblock(c)
     return c

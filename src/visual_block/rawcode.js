@@ -4,9 +4,7 @@ class rawcode extends visual_block
     vb.type = 'rawcode'
     super(vb)
     this.code = ''
-    this.holder = null
     this.base_tag = null
-    this.collider = []
   }
 
   set_holder(h){
@@ -46,7 +44,8 @@ class rawcode extends visual_block
         var ts = new tagSwitch(me.pm, gx, gy, 200, 50, [
           {text:'Remove rawcode', img:'src/tag/tag_white.png'},
           {text:'Download', img:'src/tag/tag_white.png'},
-          {text:'Deserialize', img:'src/tag/tag_white.png'}
+          {text:'DeserializeJSON', img:'src/tag/tag_white.png'},
+          {text:'DeserializeAST', img:'src/tag/tag_white.png'}
         ])
         ts.get_callback('Remove rawcode', (e, b)=>{
           me.holder.rid_visualblock(me)
@@ -71,9 +70,17 @@ class rawcode extends visual_block
             it.edit.setValue(me.pm.project_name.replace(/[^a-z0-9]/gi, '_').toLowerCase()+'.txt')
           }
         })
-        ts.get_callback('Deserialize', (e, b)=>{
+        ts.get_callback('DeserializeJSON', (e, b)=>{
           var c = me.edit.getValue()
           me.pm.deserialize(c)
+        })
+        ts.get_callback('DeserializeAST', (e,b)=>{
+          if(esprima==null){
+            console.log('esprima not found')
+            return
+          }
+          var c = esprima.parse(me.code,{range: true})
+          pm.deserializeAST(c)
         })
       }
     }

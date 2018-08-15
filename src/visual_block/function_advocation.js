@@ -7,9 +7,7 @@ class function_advocation extends visual_block
     this.inst=null;
     this.args = [];
     this.arg_space = 5
-    this.holder = null
     this.base_tag = null
-    this.collider = []
   }
   set_holder(h){
     this.holder = h
@@ -20,7 +18,7 @@ class function_advocation extends visual_block
     }else{
       this.func = func;
     }
-  }
+  }  
   set_inst(inst){
     if(inst.type != 'reference' && inst.type != 'function_advocation'){
       console.log('this is not variable or function advocation:'+inst.emit());
@@ -34,6 +32,37 @@ class function_advocation extends visual_block
       inst.collider = []
     }
   }
+  push_argument(e, callback=()=>{}){
+    var me = this
+    // add body
+    var t = e.base_tag
+    if(e==null || e.type === undefined) return
+    // check duplicate
+    for(var i=0; i<me.base_tag.container.numChildren; i++){
+      var c = me.base_tag.container.getChildAt(i)
+      if(c == t.container){
+        me.rid_visualblock(e)
+        setTimeout(()=>{
+          me.args.push(e)
+          me.update_children_pos()     
+          callback()     
+        },100)              
+        return
+      }
+    }
+    // add to array
+    e.holder.rid_visualblock(e)
+    // exchange parent
+    t.set_parent(me.base_tag.container)
+    e.set_holder(me)
+    setTimeout(()=>{
+      me.args.push(e)
+      me.update_children_pos()    
+      callback()     
+    },100)    
+    return
+  }
+  
   add_visualblock(arg){
     var me = this
     if(this.cjtext!=null){
@@ -92,7 +121,7 @@ class function_advocation extends visual_block
     var me = this
     me.pm = pm
 
-    me.base_tag = new tag(pm, this.x, this.y, 200, 27, 'src/tag/tag_white.png', onInit);
+    me.base_tag = new tag(pm, this.x, this.y, 200, 27, 'src/tag/tag_gray.png', onInit);
     me.base_tag.f_mobility = true
     me.base_tag.f_mouseover_shift = false
     me.base_tag.set_visualblock(this)
@@ -109,7 +138,7 @@ class function_advocation extends visual_block
     me.base_tag.onDrop = (t)=>{
       var e = t.visual_block
       if(e==null || e.type === undefined) return
-      if(e.type != 'reference' && e.type != 'operator' && e.type !='literal' && e.type != 'function_advocation'){
+      if(e.type != 'reference' && e.type != 'operator' && e.type !='literal' && e.type != 'function_advocation' && e.type != 'expressionArray'){
         me.base_tag.vibrate()
         return
       }
@@ -279,37 +308,80 @@ class function_advocation extends visual_block
     var ret = function_advocation.create(pm, json_obj.name, json_obj.x, json_obj.y, ()=>{
       pm.set_serialized_idmap(json_obj.id, ret.id)
       
-      var count = 0
-      pm.find_visual_block_by_id(json_obj.func_id, (r)=>{
+      async function get_args_and_init(){
+        var r = await pm.async_run('find_visual_block_by_id', json_obj.func_id)
         ret.set_func(r)
-        count--
-      })
-      count++
 
-      if('inst' in json_obj){
-        count++
-        var ti = pm.deserialiser[json_obj.inst.type](pm, json_obj.inst, (r)=>{
+        if('inst' in json_obj){
+          var ti = await pm.async_run('deserialize_any', json_obj.inst)
           ret.set_inst(ti)
-          count--
-        })
-      }
-  
-      for(var vb of json_obj.args){
-        count++
-        pm.deserialiser[vb.type](pm, vb, (r)=>{
-          ret.base_tag.onDrop(r.base_tag)
-          count--
-        }) 
-      }
-
-      var iId = setInterval(()=>{
-        if(count==0){
-          ret.update_children_pos()
-          afterInit(ret)
-          clearInterval(iId)
         }
-      },300)
+
+        for(var a of json_obj.args){
+          var r = await pm.async_run('deserialize_any', a)
+          ret.push_argument(r)
+        }
   
+        ret.update_children_pos()
+        afterInit(ret)
+      }
+      get_args_and_init()
+  
+    })
+    return ret
+  }
+  static deserializeAST(pm, ast, afterInit=(e)=>{}){
+    var n
+    if(ast.callee.type == "Identifier"){
+      n = ast.callee.name
+    }else{
+      n = ast.callee.property.name
+    }
+    var ret = function_advocation.create(pm, "call:"+n, 100, 100, ()=>{
+      var count = 0
+
+      pm.find_visual_block_by_name(n, ret, (t)=>{
+        ret.set_func(t)
+        ret.update_children_pos()
+      })
+
+      async function get_args_and_init(){
+        if(ast.callee.type != "Identifier"){
+          var r = await pm.async_run('deserialize_any', ast.callee.object)
+          ret.set_inst(r)
+         ret.update_children_pos()
+        }
+
+        for(var a of ast.arguments){
+          var r = await pm.async_run('deserialize_any', a)
+          ret.push_argument(r)
+        }
+  
+        ret.update_children_pos()
+        afterInit(ret)
+      }
+      get_args_and_init()
+    })
+    return ret
+  }
+  static deserializeAST_new(pm, ast, afterInit=(e)=>{}){
+    var ret = function_advocation.create(pm, "new:"+ast.callee.name, 100, 100, ()=>{
+      var count = 0
+
+      pm.find_visual_block_by_name("new "+ast.callee.name, ret, (t)=>{
+        ret.set_func(t)
+      })
+  
+      async function get_args_and_init(){
+        for(var a of ast.arguments){
+          var r = await pm.async_run('deserialize_any', a)
+          ret.push_argument(r)
+        }
+  
+        ret.update_children_pos()
+        afterInit(ret)
+      }
+      get_args_and_init()
     })
     return ret
   }

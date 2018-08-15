@@ -6,22 +6,28 @@ class reference extends visual_block
     this.type = 'reference'
     this.head_link = null
     this.tail_links = []
-    this.holder = null
     this.base_tag = null
-    this.collider = []
   }
   set_refer(r){
     this.head_link = r
     this.tail_links = [r]
     this.name = this.head_link.name
+    this.reflesh_link()
   }
   set_holder(h){
     this.holder = h
   }
   reflesh_link(){
     if(this.head_link!=null && this.cjtext!=null){
-      var tarray = this.tail_links.map((i)=>{return i.name})
+      var tarray = this.tail_links.map((i)=>{
+        if(i.holder.type == "expressionArray"){
+          return "[" + i.holder.getIndexFromArg(i) + "]"
+        }else{
+          return i.name
+        }
+      })
       this.name = tarray.reduce((x,y)=>{return x+'.'+y})
+      this.name = this.name.replace(".[", "[")
       this.cjtext.text = this.name
       var w = this.cjtext.getMeasuredWidth()
       this.base_tag.resize(w+10, this.base_tag.h)
@@ -156,9 +162,9 @@ class reference extends visual_block
   emit(tab=''){
     this.reflesh_link()
     if(this.head_link!=null){
-      return this.name
+      return tab + this.name
     }else{
-      return '/*Null reference Error!!!*/'
+      return tab + '/*Null reference Error!!!*/'
     }
   }
   serialize(){
@@ -197,6 +203,141 @@ class reference extends visual_block
     })
     return ret
   }
+  static deserializeAST_identifier(pm, ast, afterInit=(e)=>{}){
+    var ret = reference.create(pm, ast.name, 100, 100, ()=>{
+      pm.find_visual_block_by_name(ast.name, ret, (r)=>{
+        ret.set_refer(r)
+        afterInit(ret)
+      })
+    })
+    return ret
+  }
+  static deserializeAST_this(pm, ast, afterInit=(e)=>{}){
+    var ret = reference.create(pm, ast.name, 100, 100, ()=>{
+      pm.find_visual_block_by_name("this", ret, (r)=>{
+        ret.set_refer(r)
+      })
+    })
+    afterInit(ret)
+    return ret
+  }
+  static deserializeAST_member(pm, ast, afterInit=(e)=>{}){
+    var ret = reference.create(pm, ast.name, 100, 100, ()=>{
+      var names = []
+      function find_origin(ast){
+        if(ast.type == "Identifier"){
+          names.push(ast.name)
+          return ast
+        }else if(ast.type == "ThisExpression"){
+          names.push('this')
+          return ast
+        }else{
+          var ret = find_origin(ast.object)
+          if("name" in ast.property){
+            names.push(ast.property.name)
+          }else if(ast.property.type == "Literal"){
+            names.push("["+ast.property.raw+"]")
+          }
+          return ret
+        }
+      }
+      var o = find_origin(ast)
+
+      if(ast.object.type == "ThisExpression"){
+        pm.find_visual_block_by_name("this", ret, (r)=>{
+          names.shift()
+          ret.tail_links.push(r)
+          var p = ret.find_by_name(ast.property.name, false)
+          if(p){
+            names.shift()
+            ret.tail_links.push(p)
+            ret.set_refer(p)
+            for(var i of names){
+              var p = ret.head_link.find_by_name(i, false)
+              ret.tail_links.push(p)
+              ret.head_link = p        
+            }  
+          }else{
+            if(ast.property.type == "Identifier"){
+              var p = def_variable.create(pm, ast.property.name, 0, 0, ()=>{
+                function find_child(){
+                  pm.find_visual_block_by_name(names[0], ret.head_link, (r)=>{
+                    ret.tail_links.push(r)
+                    ret.head_link = r
+                    names.shift()
+                    if(names.length!=0){
+                      find_child()
+                    }else{
+                      ret.reflesh_link()                      
+                    }
+                  })
+                }
+                if(names.length!=0) find_child()
+              })
+              names.shift()
+              r.definition_link.base_tag.onDrop(p.base_tag)
+              ret.tail_links.push(p)
+              ret.head_link = p
+            }
+          }
+          ret.reflesh_link()
+        })
+      }else if(ast.type == "MemberExpression"){
+        pm.find_visual_block_by_name(o.name, ret, (r)=>{
+          ret.tail_links.push(r)
+          ret.head_link = r
+          names.shift()
+
+          function find_child(){
+            if(names[0][0]=="["){
+              var raw = names[0].slice(1).slice(0, -1)
+              if(isNaN(raw)){
+                // 文字列
+                pm.find_visual_block_by_name(raw, ret.head_link, (r)=>{
+                  ret.tail_links.push(r)
+                  ret.head_link = r
+                  names.shift()
+                  if(names.length!=0){
+                    find_child()
+                  }else{
+                    ret.reflesh_link()                      
+                  }
+                })    
+              }else{
+                // 数字
+                pm.find_visual_block_by_index(parseInt(raw), ret.head_link, (r)=>{
+                  ret.tail_links.push(r)
+                  ret.head_link = r
+                  names.shift()
+                  if(names.length!=0){
+                    find_child()
+                  }else{
+                    ret.reflesh_link()                      
+                  }
+                }) 
+              }
+
+            }else{
+              pm.find_visual_block_by_name(names[0], ret.head_link, (r)=>{
+                ret.tail_links.push(r)
+                ret.head_link = r
+                names.shift()
+                if(names.length!=0){
+                  find_child()
+                }else{
+                  ret.reflesh_link()                      
+                }
+              })  
+            }
+          }
+          find_child()
+        })
+      }
+    })
+    afterInit(ret)
+    return ret
+  }
+  
   static create(pm, name, x, y, afterInit=()=>{}){
     var c = new reference({name:name, x:x, y:y})
     c.id = pm.num_obj
