@@ -33,7 +33,7 @@ class program_manager_impl
     this.stage.mask = mask
 
     // init touch mouse
-    createjs.Touch.enable(stage)
+    createjs.Touch.enable(stage, false, true)
     stage.enableMouseOver();
 
     // background
